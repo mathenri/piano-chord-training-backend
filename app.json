@@ -1,0 +1,9 @@
+{
+  "name": "piano-chord-training-backend",
+  "description": "Backend for piano-chord-training app",
+  "keywords": [
+    "go"
+  ],
+  "website": "https://github.com/mathenri/piano-chord-training-backend",
+  "repository": "https://github.com/mathenri/piano-chord-training-backend"
+}

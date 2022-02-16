@@ -1,0 +1,1 @@
+web: bin/piano-chord-training-backend
