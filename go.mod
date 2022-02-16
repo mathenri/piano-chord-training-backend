@@ -1,4 +1,4 @@
-module github.com/mathenri/piano-chord-training/server
+module github.com/mathenri/piano-chord-training-backend
 
 go 1.17
 
