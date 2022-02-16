@@ -1,1 +1,1 @@
-web: bin/piano-chord-training-backend
+web: piano-chord-training-backend
