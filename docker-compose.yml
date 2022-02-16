@@ -1,0 +1,27 @@
+version: "3.9"
+
+networks:
+  development-network:
+    driver: bridge
+
+services:
+  server:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      MONGODB_URL: "mongodb://mongo:27017"
+      CLIENT_URL: "http://localhost:3000"
+    depends_on:
+      - mongo
+    networks:
+      - development-network
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    networks:
+      - development-network
