@@ -13,6 +13,7 @@ services:
     environment:
       PORT: "8080"
       MONGODB_URL: "mongodb://mongo:27017"
+      AUTH_TOKEN: ${AUTH_TOKEN}
     depends_on:
       - mongo
     networks:

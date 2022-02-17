@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -20,6 +21,7 @@ import (
 )
 
 var mongoClient *mongo.Client
+var authToken string
 
 type Stats struct {
 	ChordName                  string    `json:"chord_name" bson:"chord_name"`
@@ -32,13 +34,16 @@ type Stats struct {
 func main() {
 	// parse command line input/env vars
 	var options struct {
-		MongoUrl string `short:"u" env:"MONGODB_URL" description:"URL to mongo" required:"true"`
-		Port     string `short:"p" env:"PORT" description:"Port that server will be listening on" required:"true"`
+		MongoUrl  string `short:"u" env:"MONGODB_URL" description:"URL to mongo" required:"true"`
+		Port      string `short:"p" env:"PORT" description:"Port that server will be listening on" required:"true"`
+		AuthToken string `short:"a" env:"AUTH_TOKEN" description:"Auth token" required:"true"`
 	}
 	_, err := flags.Parse(&options)
 	if err != nil {
 		log.Fatalln("Error parsing input:", err)
 	}
+
+	authToken = options.AuthToken
 
 	// connect to mongo
 	mongoClient = connectToMongo(options.MongoUrl)
@@ -58,12 +63,13 @@ func main() {
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+	r.Use(Authorize)
 
 	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	r.Get("/stats", addStatsHandler)
+	r.Get("/stats", getStatsHandler)
 	r.Post("/stats", addStatsHandler)
 
 	log.Printf(
@@ -91,6 +97,33 @@ func addStatsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func getStatsHandler(w http.ResponseWriter, r *http.Request) {
+	stats := []Stats{}
+	cursor, err := mongoClient.Database("main").Collection("statistics").Find(
+		context.Background(),
+		bson.M{},
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = cursor.All(context.Background(), &stats)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(stats)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
+}
+
 func connectToMongo(url string) *mongo.Client {
 	client, err := mongo.Connect(context.Background(), options.Client().ApplyURI(url))
 	if err != nil {
@@ -101,4 +134,21 @@ func connectToMongo(url string) *mongo.Client {
 		log.Fatalln("Failed to ping Mongo! Error:", err)
 	}
 	return client
+}
+
+func Authorize(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var token string
+		tokens := r.Header["X-Auth-Token"]
+		if len(tokens) > 0 {
+			token = tokens[0]
+		}
+
+		if token != authToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
