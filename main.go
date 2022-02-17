@@ -61,9 +61,9 @@ func main() {
 
 	r.Route("/stats", func(r chi.Router) {
 		r.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   []string{options.ClientUrl},
-			AllowedMethods:   []string{"GET", "POST"},
-			AllowedHeaders:   []string{"Content-Type"},
+			AllowedOrigins:   []string{"*"},
+			AllowedMethods:   []string{"*"},
+			AllowedHeaders:   []string{"*"},
 			AllowCredentials: false,
 			MaxAge:           300,
 		}))
