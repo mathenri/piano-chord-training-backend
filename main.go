@@ -32,9 +32,8 @@ type Stats struct {
 func main() {
 	// parse command line input/env vars
 	var options struct {
-		MongoUrl  string `short:"u" env:"MONGODB_URL" description:"URL to mongo" required:"true"`
-		Port      string `short:"p" env:"PORT" description:"Port that server will be listening on" required:"true"`
-		ClientUrl string `short:"c" env:"CLIENT_URL" description:"URL of the client calling the server (used for cors settings)" required:"true"`
+		MongoUrl string `short:"u" env:"MONGODB_URL" description:"URL to mongo" required:"true"`
+		Port     string `short:"p" env:"PORT" description:"Port that server will be listening on" required:"true"`
 	}
 	_, err := flags.Parse(&options)
 	if err != nil {
@@ -47,35 +46,30 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.Use(
-		middleware.RequestID,
-		middleware.RealIP,
-		middleware.Logger,
-		middleware.Recoverer,
-		middleware.Timeout(60*time.Second),
-	)
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"*"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 
 	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	r.Route("/stats", func(r chi.Router) {
-		r.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   []string{"*"},
-			AllowedMethods:   []string{"*"},
-			AllowedHeaders:   []string{"*"},
-			AllowCredentials: false,
-			MaxAge:           300,
-		}))
-		r.Get("/", addStatsHandler)
-		r.Post("/", addStatsHandler)
-	})
+	r.Get("/stats", addStatsHandler)
+	r.Post("/stats", addStatsHandler)
 
 	log.Printf(
-		"Starting server!\nPort: %s\nMongoURL: %s\nClientURL: %s\n",
+		"Starting server!\nPort: %s\nMongoURL: %s\n",
 		options.Port,
 		options.MongoUrl,
-		options.ClientUrl,
 	)
 	http.ListenAndServe(fmt.Sprintf(":%s", options.Port), r)
 }
