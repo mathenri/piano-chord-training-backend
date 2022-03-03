@@ -41,6 +41,11 @@ type StatsCountByExtension struct {
 	Count     int    `json:"count" bson:"count"`
 }
 
+type StatsDurationByExtension struct {
+	Extension   string  `json:"chord_extension" bson:"_id"`
+	AvgDuration float32 `json:"avg_duration" bson:"avg"`
+}
+
 func main() {
 	// parse command line input/env vars
 	var options struct {
@@ -83,6 +88,7 @@ func main() {
 	r.Get("/stats/raw", getStatsRawHandler)
 	r.Get("/stats/count_by_day", getCountByDayHandler)
 	r.Get("/stats/count_by_extension", getCountByExtensionHandler)
+	r.Get("/stats/duration_by_extension", getAvgDurationByExtensionHandler)
 
 	log.Printf(
 		"Starting server!\nPort: %s\n",
@@ -243,6 +249,55 @@ func getCountByExtensionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonBytes, err := json.Marshal(countByExtensions)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
+}
+
+func getAvgDurationByExtensionHandler(w http.ResponseWriter, r *http.Request) {
+	cursor, err := mongoClient.Database("main").Collection("statistics").Aggregate(
+		context.Background(),
+		mongo.Pipeline{
+			bson.D{{
+				"$group", bson.D{
+					{"_id", "$chord_extension"},
+					{"avg", bson.D{{"$avg", "$answer_duration_millis"}}},
+				},
+			}},
+		},
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	var durationByExtensions []StatsDurationByExtension
+	err = cursor.All(
+		context.Background(),
+		&durationByExtensions,
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	durationByExtensionsTransformed := []StatsDurationByExtension{}
+	for _, duration := range durationByExtensions {
+		newDuration := StatsDurationByExtension{
+			AvgDuration: duration.AvgDuration / 1000,
+			Extension:   duration.Extension,
+		}
+		durationByExtensionsTransformed = append(durationByExtensionsTransformed, newDuration)
+	}
+
+	jsonBytes, err := json.Marshal(durationByExtensionsTransformed)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Error:", err)
