@@ -36,6 +36,11 @@ type StatsCountByDay struct {
 	Count int    `json:"count" bson:"count"`
 }
 
+type StatsCountByExtension struct {
+	Extension string `json:"chord_extension" bson:"_id"`
+	Count     int    `json:"count" bson:"count"`
+}
+
 func main() {
 	// parse command line input/env vars
 	var options struct {
@@ -77,6 +82,7 @@ func main() {
 	r.Post("/stats", addStatsHandler)
 	r.Get("/stats/raw", getStatsRawHandler)
 	r.Get("/stats/count_by_day", getCountByDayHandler)
+	r.Get("/stats/count_by_extension", getCountByExtensionHandler)
 
 	log.Printf(
 		"Starting server!\nPort: %s\n",
@@ -196,11 +202,47 @@ func getCountByDayHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// for start_date to end_date:
-	// if in map add to result array
-	// else add 0 result
-
 	jsonBytes, err := json.Marshal(responseCountByDays)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
+}
+
+func getCountByExtensionHandler(w http.ResponseWriter, r *http.Request) {
+	cursor, err := mongoClient.Database("main").Collection("statistics").Aggregate(
+		context.Background(),
+		mongo.Pipeline{
+			bson.D{{
+				"$group", bson.D{
+					{"_id", "$chord_extension"},
+					{"count", bson.D{{"$sum", 1}}},
+				},
+			}},
+		},
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	var countByExtensions []StatsCountByExtension
+	err = cursor.All(
+		context.Background(),
+		&countByExtensions,
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(countByExtensions)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Error:", err)
