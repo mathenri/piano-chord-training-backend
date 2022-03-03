@@ -160,10 +160,10 @@ func getCountByDayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var countByDays []StatsCountByDay
+	var countByDaysFromMongo []StatsCountByDay
 	err = cursor.All(
 		context.Background(),
-		&countByDays,
+		&countByDaysFromMongo,
 	)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -171,7 +171,36 @@ func getCountByDayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonBytes, err := json.Marshal(countByDays)
+	countsMap := make(map[string]StatsCountByDay)
+	for _, count := range countByDaysFromMongo {
+		countsMap[count.Day] = count
+	}
+
+	startTimeDaysAgo := 31
+	responseCountByDays := []StatsCountByDay{}
+	for i := startTimeDaysAgo; i >= 0; i-- {
+		today := time.Now()
+		targetDay := today.AddDate(0, 0, -i)
+		targetDayStr := targetDay.Format("2006-01-02")
+		count, exists := countsMap[targetDayStr]
+		if exists {
+			responseCountByDays = append(responseCountByDays, count)
+		} else {
+			responseCountByDays = append(
+				responseCountByDays,
+				StatsCountByDay{
+					Day:   targetDayStr,
+					Count: 0,
+				},
+			)
+		}
+	}
+
+	// for start_date to end_date:
+	// if in map add to result array
+	// else add 0 result
+
+	jsonBytes, err := json.Marshal(responseCountByDays)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println("Error:", err)
