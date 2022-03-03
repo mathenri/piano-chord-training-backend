@@ -79,9 +79,8 @@ func main() {
 	r.Get("/stats/count_by_day", getCountByDayHandler)
 
 	log.Printf(
-		"Starting server!\nPort: %s\nMongoURL: %s\n",
+		"Starting server!\nPort: %s\n",
 		options.Port,
-		options.MongoUrl,
 	)
 	http.ListenAndServe(fmt.Sprintf(":%s", options.Port), r)
 }
