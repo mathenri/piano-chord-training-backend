@@ -23,12 +23,17 @@ import (
 var mongoClient *mongo.Client
 var authToken string
 
-type Stats struct {
+type StatsRaw struct {
 	ChordName                  string    `json:"chord_name" bson:"chord_name"`
 	RootNote                   string    `json:"root_note" bson:"root_note"`
 	ChordExtension             string    `json:"chord_extension" bson:"chord_extension"`
 	AnswerDurationMilliSeconds int       `json:"answer_duration_millis" bson:"answer_duration_millis"`
 	CreatedAt                  time.Time `json:"created_at" bson:"created_at"`
+}
+
+type StatsCountByDay struct {
+	Day   string `json:"day" bson:"_id"`
+	Count int    `json:"count" bson:"count"`
 }
 
 func main() {
@@ -69,8 +74,9 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	r.Get("/stats", getStatsHandler)
 	r.Post("/stats", addStatsHandler)
+	r.Get("/stats/raw", getStatsRawHandler)
+	r.Get("/stats/count_by_day", getCountByDayHandler)
 
 	log.Printf(
 		"Starting server!\nPort: %s\nMongoURL: %s\n",
@@ -82,7 +88,7 @@ func main() {
 
 // UpdatePost updates settings
 func addStatsHandler(w http.ResponseWriter, r *http.Request) {
-	var stats Stats
+	var stats StatsRaw
 	json.NewDecoder(r.Body).Decode(&stats)
 
 	_, err := mongoClient.Database("main").Collection("statistics").InsertOne(
@@ -92,31 +98,84 @@ func addStatsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
 	} else {
 		w.WriteHeader(http.StatusOK)
 	}
 }
 
-func getStatsHandler(w http.ResponseWriter, r *http.Request) {
-	stats := []Stats{}
+func getStatsRawHandler(w http.ResponseWriter, r *http.Request) {
+	stats := []StatsRaw{}
 	cursor, err := mongoClient.Database("main").Collection("statistics").Find(
 		context.Background(),
 		bson.M{},
 	)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
 		return
 	}
 
 	err = cursor.All(context.Background(), &stats)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
 		return
 	}
 
 	jsonBytes, err := json.Marshal(stats)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonBytes)
+}
+
+func getCountByDayHandler(w http.ResponseWriter, r *http.Request) {
+	cursor, err := mongoClient.Database("main").Collection("statistics").Aggregate(
+		context.Background(),
+		mongo.Pipeline{
+			bson.D{{
+				"$group", bson.D{
+					{
+						"_id", bson.D{{
+							"$dateToString", bson.D{
+								{"format", "%Y-%m-%d"},
+								{"date", "$created_at"},
+							},
+						}},
+					},
+					{
+						"count", bson.D{{"$sum", 1}},
+					},
+				},
+			}},
+		},
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	var countByDays []StatsCountByDay
+	err = cursor.All(
+		context.Background(),
+		&countByDays,
+	)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(countByDays)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("Error:", err)
 		return
 	}
 
