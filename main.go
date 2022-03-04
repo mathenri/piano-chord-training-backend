@@ -43,7 +43,7 @@ type StatsCountByExtension struct {
 
 type StatsDurationByExtension struct {
 	Extension   string  `json:"chord_extension" bson:"_id"`
-	AvgDuration float32 `json:"avg_duration" bson:"avg"`
+	AvgDuration float64 `json:"avg_duration" bson:"avg"`
 }
 
 func main() {
